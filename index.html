@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gradient Creator</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="app">
+  <aside class="side">
+    <header>
+      <h1>Gradient Creator</h1>
+      <p>Mesh, flow and swirl gradients with grain</p>
+    </header>
+
+    <section>
+      <h2>Type</h2>
+      <div class="seg" id="type">
+        <button data-type="0" class="on">Mesh</button>
+        <button data-type="1">Flow</button>
+        <button data-type="2">Swirl</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Presets</h2>
+      <div class="presets" id="presets"></div>
+    </section>
+
+    <section>
+      <div class="row-head"><h2>Colours</h2><button class="small" id="add">Add colour</button></div>
+      <ul class="colors" id="colors"></ul>
+      <p class="hint">Drag the rings on the canvas to move each colour.</p>
+    </section>
+
+    <section class="sliders">
+      <label>Softness <output id="softness-v"></output><input type="range" id="softness" min="0.1" max="1" step="0.01"></label>
+      <label>Warp <output id="warp-v"></output><input type="range" id="warp" min="0" max="1" step="0.01"></label>
+      <label>Warp scale <output id="scale-v"></output><input type="range" id="scale" min="0.5" max="6" step="0.1"></label>
+      <label>Swirl <output id="swirl-v"></output><input type="range" id="swirl" min="-6" max="6" step="0.1"></label>
+      <label>Grain <output id="grain-v"></output><input type="range" id="grain" min="0" max="0.3" step="0.005"></label>
+    </section>
+
+    <section class="actions">
+      <button id="shuffle">Shuffle</button>
+      <button id="copylink">Copy link</button>
+    </section>
+
+    <section>
+      <h2>Export</h2>
+      <div class="export">
+        <select id="size">
+          <option value="1080x1080">Square · 1080 × 1080</option>
+          <option value="2048x2048">Square XL · 2048 × 2048</option>
+          <option value="1920x1080">Full HD · 1920 × 1080</option>
+          <option value="3840x2160">4K · 3840 × 2160</option>
+          <option value="1290x2796">Phone · 1290 × 2796</option>
+          <option value="3456x2234">MacBook Pro 16" · 3456 × 2234</option>
+          <option value="custom">Custom…</option>
+        </select>
+        <div class="custom" id="custom" hidden>
+          <input type="number" id="cw" min="16" max="8192" value="1600" aria-label="Width"> ×
+          <input type="number" id="ch" min="16" max="8192" value="1000" aria-label="Height">
+        </div>
+        <div class="seg" id="format">
+          <button data-format="png" class="on">PNG</button>
+          <button data-format="jpeg">JPEG</button>
+        </div>
+        <button class="primary" id="download">Download</button>
+      </div>
+    </section>
+  </aside>
+
+  <section class="stage">
+    <div class="frame" id="frame">
+      <canvas id="canvas"></canvas>
+      <div class="handles" id="handles"></div>
+    </div>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
