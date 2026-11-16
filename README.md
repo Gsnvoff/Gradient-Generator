@@ -1,4 +1,4 @@
-# Gradient Creator
+# Gradient Generator
 
 A small web tool for mesh, flow and swirl gradients with grain, exported as PNG or JPEG at any size.
 

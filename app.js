@@ -1,4 +1,4 @@
-// Gradient Creator: mesh, flow and swirl gradients drawn by a WebGL shader.
+// Gradient Generator: mesh, flow and swirl gradients drawn by a WebGL shader.
 // Each colour is a point; every pixel blends the colours by distance (Gaussian weights, in linear
 // light), after its position is warped by simplex noise and twisted around the centre. Grain is added
 // last. The same shader draws the preview and the export, so an export is exact at any size.
