@@ -61,3 +61,28 @@ h2 { margin: 0 0 8px; font-size: 12px; font-weight: 600; text-transform: upperca
   .app { grid-template-columns: 1fr; height: auto; }
   .stage { order: -1; }
 }
+
+[hidden] { display: none !important; }
+h2.gap { margin-top: 16px; }
+.seg.grid { display: grid; grid-template-columns: repeat(3, 1fr); }
+.seg.grid button { padding: 7px 0; }
+
+.switch { display: inline-flex !important; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; }
+.switch input { appearance: none; width: 34px; height: 20px; margin: 0; border-radius: 10px; background: #d6d6dc; position: relative; cursor: pointer; transition: background .15s; }
+.switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+.switch input:checked { background: var(--accent); }
+.switch input:checked::after { transform: translateX(14px); }
+
+.secondary { border: 1px solid var(--line); border-radius: 10px; padding: 9px; background: #fff; cursor: pointer; width: 100%; font-weight: 500; }
+.secondary:disabled { opacity: .6; cursor: progress; }
+
+dialog { width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 64px); border: 0; border-radius: 18px; padding: 18px; background: var(--panel); color: var(--ink); box-shadow: 0 30px 80px -20px rgba(0,0,0,.45); }
+dialog[open] { display: flex; flex-direction: column; gap: 12px; }
+dialog::backdrop { background: rgba(10,10,14,.45); }
+.dlg-head { display: flex; align-items: center; justify-content: space-between; }
+.dlg-head h2 { margin: 0; font-size: 15px; text-transform: none; letter-spacing: 0; color: var(--ink); }
+.close { border: 0; background: none; font-size: 22px; line-height: 1; cursor: pointer; color: var(--mute); }
+dialog .hint { margin: 0; }
+dialog pre { margin: 0; flex: 1; min-height: 200px; overflow: auto; background: #0f0f13; color: #e6e6ee; border-radius: 12px; padding: 14px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.dlg-actions { display: flex; gap: 8px; }
+.dlg-actions button { flex: 1; width: auto; }
