@@ -119,18 +119,21 @@ void main(){
       }
     } else if (uType == 4) {     // Horizon: a glowing dome rising from the bottom edge, with soft bands
       vec2 h = vec2(mix(q.x, w.x, 0.35) / ax, mix(q.y, w.y, 0.35));
-      float e = length(vec2(h.x * 1.1, (h.y - 0.85) * 1.05)) - 0.62;
+      h.x += 0.07 * sin(uTime);                                     // sway
+      float e = length(vec2(h.x * 1.1, (h.y - 0.85) * 1.05)) - 0.62 - 0.035 * sin(2.0 * uTime); // breathe
       float wid = (0.05 + s * 0.2) * (e < 0.0 ? 2.6 : 1.0);
       float bands = 0.5 + 0.5 * cos(e * 30.0 * uScale / 1.4);
       t = exp(-e * e / (wid * wid)) * (0.94 + 0.06 * bands);
       t *= 1.0 - 0.55 * smoothstep(0.25, 0.5, h.y);
     } else if (uType == 5) {     // Fade: dark to light, the light edge bowed so the sides fall off first
-      float x = w.x / ax;
-      t = smoothstep(-0.2 - s * 0.3, 0.6, w.y - 0.45 * x * x);
+      float x = w.x / ax + 0.1 * sin(uTime);
+      float edge = 0.06 * sin(2.0 * uTime) + 0.05 * (sin(x * 4.0 + uTime) - sin(x * 4.0));
+      t = smoothstep(-0.2 - s * 0.3, 0.6, w.y - 0.45 * x * x + edge);
     } else if (uType == 6) {     // Glow: a light source just past the edge, plus a smaller side flare
       vec2 g = vec2(w.x / ax, w.y);
       float k = 0.15 + s * 0.9;
-      vec2 a = g - vec2(0.0, 0.72), b = g - vec2(0.38, 0.6);
+      vec2 a = g - vec2(0.0, 0.72) - 0.1 * vec2(sin(uTime), 1.0 - cos(uTime));
+      vec2 b = g - vec2(0.38, 0.6) - vec2(0.3 * (cos(uTime) - 1.0), 0.06 * sin(2.0 * uTime));
       t = exp(-dot(a, a) / (k * k)) + 0.45 * exp(-dot(b, b) / (k * k * 0.35));
     } else if (uType == 7) {     // Waves: layered sine bands
       float v = w.y * 2.2 + 0.25 * sin(w.x * 2.5 * uScale + uTime + uSeed) + 0.15 * sin(w.x * 4.1 * uScale - 2.0 * uTime + uSeed * 1.7);
