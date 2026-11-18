@@ -65,7 +65,9 @@
       sc: state.scale, sw: state.swirl, g: state.grain, se: state.seed, a: state.angle, an: state.animate ? 1 : 0,
       sp: state.speed, sz: state.size, cu: state.custom };
     history.replaceState(null, "", "#" + btoa(JSON.stringify(s)));
+    ownHash = location.hash;
   }
+  let ownHash = "";
   function load() {
     if (location.hash.length < 2) return;
     try {
@@ -115,6 +117,9 @@
   function render() { if (!raf && !busy) raf = requestAnimationFrame(frameTick); }
 
   // ---------- Handles ----------
+  // While animating, each colour point moves along the same loop as in the shader (core.js), so the
+  // rings follow their colours; dragging sets the point's resting position.
+  const drift = i => [0.08 * (Math.sin(phase + i * 2.1) - Math.sin(i * 2.1)), 0.08 * (Math.sin(2 * phase + i * 1.3) - Math.sin(i * 1.3))];
   function placeHandles() {
     handles.hidden = isRamp(state.type);
     if (handles.children.length !== state.colors.length) {
@@ -125,17 +130,17 @@
       });
     }
     [...handles.children].forEach((h, i) => {
-      const p = state.colors[i];
-      h.style.left = (p.x * 100) + "%"; h.style.top = (p.y * 100) + "%"; h.style.background = p.c;
+      const p = state.colors[i], [dx, dy] = drift(i);
+      h.style.left = ((p.x + dx) * 100) + "%"; h.style.top = ((p.y + dy) * 100) + "%"; h.style.background = p.c;
     });
   }
   function startDrag(e) {
     const i = +e.currentTarget.dataset.i, h = e.currentTarget;
     h.setPointerCapture(e.pointerId);
     const move = ev => {
-      const r = frame.getBoundingClientRect();
-      state.colors[i].x = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
-      state.colors[i].y = Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height));
+      const r = frame.getBoundingClientRect(), [dx, dy] = drift(i);
+      state.colors[i].x = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width - dx));
+      state.colors[i].y = Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height - dy));
       render();
     };
     const up = () => { h.removeEventListener("pointermove", move); h.removeEventListener("pointerup", up); save(); };
@@ -254,8 +259,14 @@
     const stopped = new Promise(res => { rec.onstop = res; });
     g.draw(cfg(), 0); rec.start();
     const t0 = performance.now();
+    let aborted = false, finish;
+    // Browsers pause hidden tabs, which would leave a broken loop: stop instead.
+    const onHide = () => { if (document.hidden) { aborted = true; finish(); } };
+    document.addEventListener("visibilitychange", onHide);
     await new Promise(res => {
+      finish = res;
       const step = now => {
+        if (aborted) return;
         const e = now - t0;
         btn.textContent = `Recording… ${Math.ceil((period - e) / 1000)}s`;
         if (e >= period) { res(); return; }
@@ -263,8 +274,10 @@
       };
       requestAnimationFrame(step);
     });
+    document.removeEventListener("visibilitychange", onHide);
     rec.stop(); await stopped;
-    downloadBlob(new Blob(chunks, { type: mime }), `${fileName()}-${w}x${h}.${mime.startsWith("video/mp4") ? "mp4" : "webm"}`);
+    if (aborted) alert("Recording stopped because the tab was hidden. Keep this tab visible while it records.");
+    else downloadBlob(new Blob(chunks, { type: mime }), `${fileName()}-${w}x${h}.${mime.startsWith("video/mp4") ? "mp4" : "webm"}`);
     canvas.width = keep[0]; canvas.height = keep[1];
     btn.textContent = label; btn.disabled = false; busy = false; render();
   });
@@ -388,6 +401,12 @@ ${core()}
 
   load();
   syncControls();
+  ownHash = location.hash;
+  // A different share link pasted into this tab: load it (our own saves are ignored).
+  window.addEventListener("hashchange", () => {
+    if (location.hash === ownHash) return;
+    ownHash = location.hash; load(); syncControls(); fit();
+  });
   window.addEventListener("resize", fit);
   fit();
 })();
