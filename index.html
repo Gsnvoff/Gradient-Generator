@@ -11,27 +11,35 @@
   <aside class="side">
     <header>
       <h1>Gradient Generator</h1>
-      <p>Mesh, flow and swirl gradients with grain</p>
+      <p>Mesh, flow, hero and animated gradients with grain</p>
     </header>
 
     <section>
-      <h2>Type</h2>
-      <div class="seg" id="type">
-        <button data-type="0" class="on">Mesh</button>
+      <h2>Pattern</h2>
+      <div class="seg grid" id="type">
+        <button data-type="0">Mesh</button>
         <button data-type="1">Flow</button>
         <button data-type="2">Swirl</button>
+        <button data-type="3">Aurora</button>
+        <button data-type="4">Horizon</button>
+        <button data-type="5">Fade</button>
+        <button data-type="6">Glow</button>
+        <button data-type="7">Waves</button>
+        <button data-type="8">Prism</button>
       </div>
     </section>
 
     <section>
-      <h2>Presets</h2>
-      <div class="presets" id="presets"></div>
+      <h2>Soft presets</h2>
+      <div class="presets" id="presets-soft"></div>
+      <h2 class="gap">Hero presets</h2>
+      <div class="presets" id="presets-hero"></div>
     </section>
 
     <section>
       <div class="row-head"><h2>Colours</h2><button class="small" id="add">Add colour</button></div>
       <ul class="colors" id="colors"></ul>
-      <p class="hint">Drag the rings on the canvas to move each colour.</p>
+      <p class="hint" id="hint"></p>
     </section>
 
     <section class="sliders">
@@ -39,7 +47,13 @@
       <label>Warp <output id="warp-v"></output><input type="range" id="warp" min="0" max="1" step="0.01"></label>
       <label>Warp scale <output id="scale-v"></output><input type="range" id="scale" min="0.5" max="6" step="0.1"></label>
       <label>Swirl <output id="swirl-v"></output><input type="range" id="swirl" min="-6" max="6" step="0.1"></label>
+      <label id="angle-row">Angle <output id="angle-v"></output><input type="range" id="angle" min="0" max="360" step="1"></label>
       <label>Grain <output id="grain-v"></output><input type="range" id="grain" min="0" max="0.3" step="0.005"></label>
+    </section>
+
+    <section class="sliders">
+      <div class="row-head"><h2>Motion</h2><label class="switch"><input type="checkbox" id="animate"><span>Animate</span></label></div>
+      <label>Speed <output id="speed-v"></output><input type="range" id="speed" min="0.2" max="3" step="0.05"></label>
     </section>
 
     <section class="actions">
@@ -67,7 +81,9 @@
           <button data-format="png" class="on">PNG</button>
           <button data-format="jpeg">JPEG</button>
         </div>
-        <button class="primary" id="download">Download</button>
+        <button class="primary" id="download">Download image</button>
+        <button class="secondary" id="video">Download video (one loop)</button>
+        <button class="secondary" id="code">Get code</button>
       </div>
     </section>
   </aside>
@@ -79,6 +95,26 @@
     </div>
   </section>
 </main>
+
+<dialog id="code-dialog">
+  <div class="dlg-head">
+    <h2>Get code</h2>
+    <button class="close" id="code-close" aria-label="Close">×</button>
+  </div>
+  <div class="seg" id="code-lang">
+    <button data-lang="html" class="on">HTML</button>
+    <button data-lang="react">React</button>
+    <button data-lang="css">CSS</button>
+  </div>
+  <p class="hint" id="code-note"></p>
+  <pre><code id="code-out"></code></pre>
+  <div class="dlg-actions">
+    <button class="secondary" id="code-save">Download file</button>
+    <button class="primary" id="code-copy">Copy code</button>
+  </div>
+</dialog>
+
+<script src="core.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

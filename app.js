@@ -1,13 +1,14 @@
-// Gradient Generator: mesh, flow and swirl gradients drawn by a WebGL shader.
-// Each colour is a point; every pixel blends the colours by distance (Gaussian weights, in linear
-// light), after its position is warped by simplex noise and twisted around the centre. Grain is added
-// last. The same shader draws the preview and the export, so an export is exact at any size.
+// Gradient Generator: the editor around core.js (which holds the shader and is what "Get code" exports).
 (function () {
   "use strict";
 
-  const MAX = 6;
+  const MAX = 6, TAU = Math.PI * 2;
+  const TYPES = ["Mesh", "Flow", "Swirl", "Aurora", "Horizon", "Fade", "Glow", "Waves", "Prism"];
+  const isRamp = t => t >= 3;
 
-  // Presets: four colours each, light → deep, with a default layout.
+  // Soft presets keep the current pattern; hero presets also pick a pattern and its settings.
+  // Hero colours run from background to brightest.
+  const HERO = { swirl: 0, warp: 0.12, scale: 1.2, softness: 0.55, grain: 0.04 };
   const PRESETS = [
     ["Iridescent cloud", ["#eaf4fc", "#1e50a2", "#f09199", "#3b2a55"]],
     ["Opal", ["#e8e4f8", "#9c86e0", "#f2b8cf", "#3a2c6e"]],
@@ -21,20 +22,48 @@
     ["Mint ice", ["#e2fff4", "#86e0c4", "#3e97a6", "#173f55"]],
     ["Midnight bloom", ["#d2c2ff", "#7a4fd1", "#c0509a", "#120c33"]],
     ["Rose gold", ["#fbe1d2", "#e6a08f", "#b4626b", "#46242f"]],
+
+    ["Ember dome", ["#050302", "#3d0f02", "#ff5b12", "#ffd9bf"], 4, HERO],
+    ["Acid dome", ["#030401", "#1e2a04", "#9ad11a", "#eaffb0"], 4, HERO],
+    ["Cyan dome", ["#01070a", "#04324a", "#1aa8f0", "#c8f0ff"], 4, HERO],
+    ["Cobalt dome", ["#02041a", "#0b1d7a", "#3d6bff", "#cfe0ff"], 4, HERO],
+    ["Ultraviolet dome", ["#06020f", "#2a0a6b", "#8a3dff", "#e8d8ff"], 4, HERO],
+    ["Silver dome", ["#030303", "#2a2a2a", "#9a9a9a", "#f2f2f2"], 4, HERO],
+    ["Violet dusk", ["#000000", "#3b0f9e", "#8b46ff", "#d8c2ff", "#f7f4ff"], 5, { ...HERO, angle: 180 }],
+    ["Ember rise", ["#000000", "#5a1a02", "#ff6a1a", "#ffe3d0"], 5, { ...HERO, warp: 0.15 }],
+    ["Lime rise", ["#000000", "#243305", "#a6e22e", "#f2ffd0"], 5, { ...HERO, warp: 0.15 }],
+    ["Sky rise", ["#000000", "#06304d", "#2bb3ff", "#e0f6ff"], 5, { ...HERO, warp: 0.15 }],
+    ["Sunrise leak", ["#03020d", "#3b0e1a", "#ff5a2a", "#ffe08a"], 6, { ...HERO, angle: 10 }],
+    ["Toxic leak", ["#03020d", "#1a3010", "#8fd13a", "#e9ff9a"], 6, { ...HERO, angle: 340 }],
+    ["Corner neon", ["#03020d", "#0a1640", "#2f5bff", "#9ad8ff"], 6, { ...HERO, angle: 135 }],
+    ["Northern lights", ["#020611", "#063a3a", "#22e0a0", "#c9ffe8"], 3, { ...HERO, angle: 180, warp: 0.5 }],
+    ["Magenta aurora", ["#08030f", "#3b0a4a", "#d63fd0", "#ffd0f5"], 3, { ...HERO, angle: 180, warp: 0.5 }],
+    ["Candy waves", ["#ffd6e8", "#ff8fb8", "#7f6cff", "#2c1f70"], 7, { ...HERO, warp: 0.25, softness: 0.7, grain: 0.05 }],
+    ["Deep sea", ["#031b2e", "#0a5b7a", "#36c2c9", "#c8fff6"], 7, { ...HERO, warp: 0.4, softness: 0.8 }],
+    ["Holo prism", ["#ffd1f0", "#a7c4ff", "#b8ffe6", "#fff3b0"], 8, { ...HERO, warp: 0.5, softness: 0.8, grain: 0.05 }],
+    ["Night prism", ["#0b0620", "#4a1d96", "#ff4f9a", "#ffb36b"], 8, { ...HERO, warp: 0.5, softness: 0.6 }],
   ];
   const LAYOUT = [[0.78, 0.18], [0.3, 0.38], [0.72, 0.78], [0.12, 0.88], [0.5, 0.55], [0.15, 0.12]];
 
   const state = {
     type: 1,
     colors: PRESETS[0][1].map((c, i) => ({ c, x: LAYOUT[i][0], y: LAYOUT[i][1] })),
-    softness: 0.5, warp: 0.6, scale: 1.4, swirl: 1.2, grain: 0.06, seed: 7.3,
+    softness: 0.5, warp: 0.6, scale: 1.4, swirl: 1.2, grain: 0.06, seed: 7.3, angle: 0,
+    animate: false, speed: 1,
     preset: 0, size: "1080x1080", custom: [1600, 1000], format: "png",
   };
+  const r4 = n => Math.round(n * 1e4) / 1e4;
+  const cfg = () => ({
+    type: state.type, colors: state.colors.map(p => [p.c, r4(p.x), r4(p.y)]),
+    softness: state.softness, warp: state.warp, scale: state.scale, swirl: state.swirl, grain: state.grain,
+    seed: state.seed, angle: state.angle, animate: state.animate, speed: state.speed,
+  });
 
   // ---------- URL state (Copy link) ----------
   function save() {
-    const s = { t: state.type, c: state.colors.map(p => [p.c, +p.x.toFixed(4), +p.y.toFixed(4)]), so: state.softness, w: state.warp,
-      sc: state.scale, sw: state.swirl, g: state.grain, se: state.seed, sz: state.size, cu: state.custom };
+    const s = { t: state.type, c: state.colors.map(p => [p.c, r4(p.x), r4(p.y)]), so: state.softness, w: state.warp,
+      sc: state.scale, sw: state.swirl, g: state.grain, se: state.seed, a: state.angle, an: state.animate ? 1 : 0,
+      sp: state.speed, sz: state.size, cu: state.custom };
     history.replaceState(null, "", "#" + btoa(JSON.stringify(s)));
   }
   function load() {
@@ -42,106 +71,17 @@
     try {
       const s = JSON.parse(atob(location.hash.slice(1)));
       state.type = s.t; state.colors = s.c.slice(0, MAX).map(([c, x, y]) => ({ c, x, y }));
-      Object.assign(state, { softness: s.so, warp: s.w, scale: s.sc, swirl: s.sw, grain: s.g, seed: s.se, size: s.sz || state.size, custom: s.cu || state.custom });
+      Object.assign(state, { softness: s.so, warp: s.w, scale: s.sc, swirl: s.sw, grain: s.g, seed: s.se,
+        angle: s.a || 0, animate: !!s.an, speed: s.sp || 1, size: s.sz || state.size, custom: s.cu || state.custom });
       state.preset = -1;
     } catch (e) { /* a broken link: keep the defaults */ }
   }
 
-  // ---------- WebGL ----------
+  // ---------- Renderer ----------
   const canvas = document.getElementById("canvas");
-  const gl = canvas.getContext("webgl", { preserveDrawingBuffer: true, antialias: false });
-  if (!gl) { document.body.textContent = "This browser can't run WebGL."; return; }
-
-  const vert = "attribute vec2 a; void main(){ gl_Position = vec4(a, 0.0, 1.0); }";
-  const frag = `
-precision highp float;
-uniform vec2 uRes; uniform int uCount; uniform vec2 uPos[${MAX}]; uniform vec3 uCol[${MAX}];
-uniform float uSoft, uWarp, uScale, uSwirl, uGrain, uSeed; uniform int uType;
-
-vec3 mod289(vec3 x){ return x - floor(x * (1.0/289.0)) * 289.0; }
-vec2 mod289(vec2 x){ return x - floor(x * (1.0/289.0)) * 289.0; }
-vec3 permute(vec3 x){ return mod289(((x*34.0)+1.0)*x); }
-float snoise(vec2 v){
-  const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
-  vec2 i = floor(v + dot(v, C.yy)); vec2 x0 = v - i + dot(i, C.xx);
-  vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
-  vec4 x12 = x0.xyxy + C.xxzz; x12.xy -= i1; i = mod289(i);
-  vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
-  vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0); m = m*m; m = m*m;
-  vec3 x = 2.0 * fract(p * C.www) - 1.0; vec3 h = abs(x) - 0.5; vec3 ox = floor(x + 0.5); vec3 a0 = x - ox;
-  m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
-  vec3 g; g.x = a0.x * x0.x + h.x * x0.y; g.yz = a0.yz * x12.xz + h.yz * x12.yw;
-  return 130.0 * dot(m, g);
-}
-vec2 field(vec2 p){ return vec2(snoise(p * uScale + uSeed), snoise(p * uScale + uSeed + 31.7)); }
-float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233)) + uSeed) * 43758.5453); }
-vec3 toLinear(vec3 c){ return pow(c, vec3(2.2)); }
-vec3 toSRGB(vec3 c){ return pow(clamp(c, 0.0, 1.0), vec3(1.0/2.2)); }
-
-void main(){
-  vec2 uv = gl_FragCoord.xy / uRes; uv.y = 1.0 - uv.y;
-  float aspect = uRes.x / uRes.y;
-  vec2 p = uv;
-  // Swirl: a twist around the centre, strongest in the middle (Swirl type doubles it).
-  vec2 c = p - 0.5; c.x *= aspect;
-  float twist = uSwirl * (uType == 2 ? 2.0 : 0.6) * exp(-dot(c, c) * 3.0);
-  float s = sin(twist), co = cos(twist);
-  c = mat2(co, -s, s, co) * c; c.x /= aspect; p = c + 0.5;
-  // Warp: one layer for Mesh, two (domain-warped) for Flow and Swirl.
-  if (uType == 0) { p += uWarp * 0.12 * field(p); }
-  else { vec2 q = field(p); p += uWarp * 0.16 * field(p + q * 0.35); }
-  // Gaussian weights relative to the nearest point (a softmax over distances): far from every point
-  // they'd underflow to zero and blend all colours into noise; relative ones never do.
-  float sigma = 0.12 + uSoft * 0.55;
-  float dist[${MAX}]; float nearest = 1e9;
-  for (int i = 0; i < ${MAX}; i++) {
-    dist[i] = 1e9;
-    if (i >= uCount) continue;
-    vec2 d = p - uPos[i]; d.x *= aspect;
-    dist[i] = dot(d, d); nearest = min(nearest, dist[i]);
-  }
-  vec3 col = vec3(0.0); float total = 0.0;
-  for (int i = 0; i < ${MAX}; i++) {
-    if (i >= uCount) break;
-    float w = exp(-(dist[i] - nearest) / (sigma * sigma));
-    col += w * toLinear(uCol[i]); total += w;
-  }
-  col = toSRGB(col / total);
-  col += (hash(gl_FragCoord.xy) - 0.5) * uGrain;
-  gl_FragColor = vec4(col, 1.0);
-}`;
-
-  function shader(type, src) {
-    const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
-    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
-    return s;
-  }
-  const prog = gl.createProgram();
-  gl.attachShader(prog, shader(gl.VERTEX_SHADER, vert));
-  gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, frag));
-  gl.linkProgram(prog); gl.useProgram(prog);
-  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-  const aLoc = gl.getAttribLocation(prog, "a");
-  gl.enableVertexAttribArray(aLoc); gl.vertexAttribPointer(aLoc, 2, gl.FLOAT, false, 0, 0);
-  const U = n => gl.getUniformLocation(prog, n);
-  const u = { res: U("uRes"), count: U("uCount"), pos: U("uPos"), col: U("uCol"), soft: U("uSoft"), warp: U("uWarp"),
-    scale: U("uScale"), swirl: U("uSwirl"), grain: U("uGrain"), seed: U("uSeed"), type: U("uType") };
-
-  const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
-
-  function draw(grainScale) {
-    gl.viewport(0, 0, canvas.width, canvas.height);
-    gl.uniform2f(u.res, canvas.width, canvas.height);
-    gl.uniform1i(u.count, state.colors.length);
-    const pos = new Float32Array(MAX * 2), col = new Float32Array(MAX * 3);
-    state.colors.forEach((p, i) => { pos[i * 2] = p.x; pos[i * 2 + 1] = p.y; col.set(hex(p.c), i * 3); });
-    gl.uniform2fv(u.pos, pos); gl.uniform3fv(u.col, col);
-    gl.uniform1f(u.soft, state.softness); gl.uniform1f(u.warp, state.warp); gl.uniform1f(u.scale, state.scale);
-    gl.uniform1f(u.swirl, state.swirl); gl.uniform1f(u.grain, state.grain * (grainScale || 1)); gl.uniform1f(u.seed, state.seed);
-    gl.uniform1i(u.type, state.type);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-  }
+  const g = createGradient(canvas, { preserveDrawingBuffer: true });
+  if (!g) { document.body.textContent = "This browser can't run WebGL."; return; }
+  const gl = g.gl;
 
   // ---------- Layout ----------
   const frame = document.getElementById("frame"), handles = document.getElementById("handles");
@@ -158,14 +98,25 @@ void main(){
     canvas.width = Math.round(cw * dpr); canvas.height = Math.round(ch * dpr);
     render();
   }
-  let pending = false;
-  function render() {
-    if (pending) return; pending = true;
-    requestAnimationFrame(() => { pending = false; draw(); placeHandles(); });
+
+  // One frame on demand; a continuous loop while animating. The phase advances by real time, so
+  // one loop takes 10 / speed seconds, the same as exported code and video.
+  let raf = 0, phase = 0, last = 0, busy = false;
+  function frameTick(now) {
+    raf = 0;
+    if (busy) return;
+    if (state.animate) {
+      if (last) phase = (phase + (now - last) / 1000 * state.speed * TAU / 10) % TAU;
+      last = now;
+    } else { last = 0; }
+    g.draw(cfg(), phase); placeHandles();
+    if (state.animate) raf = requestAnimationFrame(frameTick);
   }
+  function render() { if (!raf && !busy) raf = requestAnimationFrame(frameTick); }
 
   // ---------- Handles ----------
   function placeHandles() {
+    handles.hidden = isRamp(state.type);
     if (handles.children.length !== state.colors.length) {
       handles.innerHTML = "";
       state.colors.forEach((p, i) => {
@@ -193,14 +144,20 @@ void main(){
 
   // ---------- Controls ----------
   const $ = id => document.getElementById(id);
-  const SLIDERS = { softness: v => Math.round(v * 100) + "%", warp: v => Math.round(v * 100) + "%", scale: v => (+v).toFixed(1),
-    swirl: v => (+v).toFixed(1), grain: v => Math.round(v * 100) + "%" };
+  const pct = v => Math.round(v * 100) + "%";
+  const SLIDERS = { softness: pct, warp: pct, scale: v => (+v).toFixed(1), swirl: v => (+v).toFixed(1),
+    angle: v => Math.round(v) + "°", grain: pct, speed: v => (+v).toFixed(2) + "×" };
 
   function syncControls() {
     for (const k in SLIDERS) { $(k).value = state[k]; $(k + "-v").textContent = SLIDERS[k](state[k]); }
+    $("animate").checked = state.animate;
+    $("angle-row").hidden = !isRamp(state.type);
+    $("hint").textContent = isRamp(state.type)
+      ? "The first colour is the background and the last is the brightest; the rest blend in between in order."
+      : "Drag the rings on the canvas to move each colour.";
     [...$("type").children].forEach(b => b.classList.toggle("on", +b.dataset.type === state.type));
     [...$("format").children].forEach(b => b.classList.toggle("on", b.dataset.format === state.format));
-    [...$("presets").children].forEach((b, i) => b.classList.toggle("on", i === state.preset));
+    document.querySelectorAll(".preset").forEach(b => b.classList.toggle("on", +b.dataset.i === state.preset));
     $("size").value = state.size; $("custom").hidden = state.size !== "custom";
     $("cw").value = state.custom[0]; $("ch").value = state.custom[1];
     const list = $("colors"); list.innerHTML = "";
@@ -216,18 +173,25 @@ void main(){
   }
   function changed() { syncControls(); render(); save(); }
 
-  PRESETS.forEach(([name, colors], i) => {
-    const b = document.createElement("button"); b.className = "preset";
-    b.innerHTML = `<i style="background:conic-gradient(${colors.map((c, j) => `${c} ${j * 25}% ${(j + 1) * 25}%`).join(",")})"></i>${name}`;
+  function swatch(colors, type) {
+    if (type === undefined) return `conic-gradient(${colors.map((c, j) => `${c} ${j * 25}% ${(j + 1) * 25}%`).join(",")})`;
+    const rev = [...colors].reverse();
+    return `radial-gradient(circle at 50% 100%, ${rev.map((c, j) => `${c} ${Math.round(j / (rev.length - 1) * 90)}%`).join(",")})`;
+  }
+  PRESETS.forEach(([name, colors, type, opts], i) => {
+    const b = document.createElement("button"); b.className = "preset"; b.dataset.i = i;
+    b.innerHTML = `<i style="background:${swatch(colors, type)}"></i>${name}`;
     b.addEventListener("click", () => {
       state.preset = i;
       state.colors = colors.map((c, j) => ({ c, x: LAYOUT[j][0], y: LAYOUT[j][1] }));
+      if (type !== undefined) Object.assign(state, { angle: 0 }, opts, { type });
       changed();
     });
-    $("presets").appendChild(b);
+    $(type === undefined ? "presets-soft" : "presets-hero").appendChild(b);
   });
   for (const k in SLIDERS) $(k).addEventListener("input", e => { state[k] = +e.target.value; $(k + "-v").textContent = SLIDERS[k](state[k]); render(); });
   for (const k in SLIDERS) $(k).addEventListener("change", save);
+  $("animate").addEventListener("change", e => { state.animate = e.target.checked; if (!state.animate) phase = 0; changed(); });
   $("type").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { state.type = +b.dataset.type; changed(); } });
   $("format").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { state.format = b.dataset.format; syncControls(); } });
   $("add").addEventListener("click", () => {
@@ -250,25 +214,177 @@ void main(){
   function flash(button, text) {
     const old = button.textContent; button.textContent = text; setTimeout(() => { button.textContent = old; }, 1200);
   }
+  const fileName = () => state.preset >= 0 ? PRESETS[state.preset][0].toLowerCase().replace(/\s+/g, "-") : "gradient";
+  function downloadBlob(blob, name) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
 
-  // ---------- Export ----------
+  // ---------- Export: image (the current frame) ----------
   $("download").addEventListener("click", () => {
     const [w, h] = exportSize(), max = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
     if (w > max || h > max) { alert(`This browser can draw at most ${max} × ${max}.`); return; }
-    const keep = [canvas.width, canvas.height, frame.style.width, frame.style.height];
+    busy = true;
+    const keep = [canvas.width, canvas.height];
     canvas.width = w; canvas.height = h;
-    // Grain is per pixel: scaled so it reads the same as the preview at this size.
-    draw(1);
-    const type = state.format === "jpeg" ? "image/jpeg" : "image/png";
+    g.draw(cfg(), phase);
     canvas.toBlob(blob => {
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      const name = state.preset >= 0 ? PRESETS[state.preset][0].toLowerCase().replace(/\s+/g, "-") : "gradient";
-      a.download = `${name}-${w}x${h}.${state.format === "jpeg" ? "jpg" : "png"}`;
-      a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-      canvas.width = keep[0]; canvas.height = keep[1]; render();
-    }, type, 0.95);
+      downloadBlob(blob, `${fileName()}-${w}x${h}.${state.format === "jpeg" ? "jpg" : "png"}`);
+      canvas.width = keep[0]; canvas.height = keep[1]; busy = false; render();
+    }, state.format === "jpeg" ? "image/jpeg" : "image/png", 0.95);
   });
+
+  // ---------- Export: video (exactly one seamless loop, recorded in real time) ----------
+  $("video").addEventListener("click", async () => {
+    if (busy) return;
+    const mime = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9", "video/webm"]
+      .find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m));
+    if (!mime || !canvas.captureStream) { alert("This browser can't record video from a canvas."); return; }
+    let [w, h] = exportSize();
+    const k = Math.min(1, 1920 / Math.max(w, h)); // video encoders top out around 1080p-class sizes
+    w = Math.round(w * k / 2) * 2; h = Math.round(h * k / 2) * 2;
+    const btn = $("video"), label = btn.textContent, period = 10 / state.speed * 1000;
+    busy = true; btn.disabled = true;
+    const keep = [canvas.width, canvas.height];
+    canvas.width = w; canvas.height = h;
+    const rec = new MediaRecorder(canvas.captureStream(60), { mimeType: mime, videoBitsPerSecond: 20e6 });
+    const chunks = [];
+    rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    const stopped = new Promise(res => { rec.onstop = res; });
+    g.draw(cfg(), 0); rec.start();
+    const t0 = performance.now();
+    await new Promise(res => {
+      const step = now => {
+        const e = now - t0;
+        btn.textContent = `Recording… ${Math.ceil((period - e) / 1000)}s`;
+        if (e >= period) { res(); return; }
+        g.draw(cfg(), e / period * TAU); requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+    rec.stop(); await stopped;
+    downloadBlob(new Blob(chunks, { type: mime }), `${fileName()}-${w}x${h}.${mime.startsWith("video/mp4") ? "mp4" : "webm"}`);
+    canvas.width = keep[0]; canvas.height = keep[1];
+    btn.textContent = label; btn.disabled = false; busy = false; render();
+  });
+
+  // ---------- Export: code ----------
+  let lang = "html";
+  const indent = (src, pad) => src.split("\n").map(l => (l ? pad + l : l)).join("\n");
+  const core = () => createGradient.toString() + "\n\n" + mountGradient.toString();
+  const json = () => JSON.stringify(cfg());
+
+  function htmlCode() {
+    return `<!-- Gradient Generator · ${TYPES[state.type]} gradient${state.animate ? ", animated" : ""}.
+     Size the canvas however you like; it redraws sharp at any size. -->
+<canvas id="gradient" style="display:block;width:100%;height:100vh"></canvas>
+<script>
+(function () {
+${indent(core(), "  ")}
+
+  mountGradient(document.getElementById("gradient"), ${json()});
+})();
+</script>
+`;
+  }
+  function reactCode() {
+    return `// Gradient Generator · ${TYPES[state.type]} gradient${state.animate ? ", animated" : ""}.
+// Usage: <Gradient style={{ height: "100vh" }} />
+import { useEffect, useRef } from "react";
+
+const CONFIG = ${json()};
+
+export default function Gradient({ className, style }) {
+  const ref = useRef(null);
+  useEffect(() => mountGradient(ref.current, CONFIG), []);
+  return <canvas ref={ref} className={className} style={{ display: "block", width: "100%", height: "100%", ...style }} />;
+}
+
+${core()}
+`;
+  }
+  // CSS can't run the shader, so this is a close approximation built from CSS gradients plus an SVG grain layer.
+  function cssCode() {
+    const cs = state.colors.map(p => p.c), n = cs.length, a = state.angle;
+    const stops = list => list.map((c, i) => `${c} ${Math.round(i / (list.length - 1) * 100)}%`).join(", ");
+    const ax = Math.round(50 - Math.sin(a * Math.PI / 180) * 60), ay = Math.round(50 + Math.cos(a * Math.PI / 180) * 60);
+    const rev = [...cs].reverse();
+    let layers;
+    if (!isRamp(state.type)) {
+      const r = Math.round(35 + state.softness * 40);
+      layers = state.colors.map(p => `radial-gradient(circle at ${Math.round(p.x * 100)}% ${Math.round(p.y * 100)}%, ${p.c} 0%, ${p.c}00 ${r}%)`);
+      layers.push(cs[n - 1]);
+    } else if (state.type === 5) {
+      layers = [`linear-gradient(${(180 + a) % 360}deg, ${stops(cs)})`];
+    } else if (state.type === 4) {
+      layers = [`radial-gradient(ellipse 85% 75% at ${ax}% ${ay}%, ${rev.slice(1).map((c, i) => `${c} ${Math.round(45 + i / (n - 1) * 45)}%`).join(", ")}, ${cs[0]} 100%)`,
+        `radial-gradient(ellipse 80% 60% at ${ax}% ${ay + 15}%, ${cs[0]} 40%, transparent 70%)`, cs[0]];
+    } else if (state.type === 6) {
+      layers = [`radial-gradient(ellipse 110% 90% at ${ax}% ${ay}%, ${stops(rev)})`];
+    } else if (state.type === 8) {
+      layers = [`conic-gradient(from ${a}deg at 50% 50%, ${stops([...cs, ...rev.slice(1)])})`];
+    } else if (state.type === 7) {
+      layers = [`repeating-linear-gradient(${(180 + a) % 360}deg, ${stops([...cs, ...rev.slice(1)]).replace(/(\d+)%/g, (_, v) => Math.round(v * 0.3) + "%")})`];
+    } else {
+      layers = [`linear-gradient(${(a) % 360}deg, ${cs[0]} 20%, ${cs[Math.min(2, n - 1)]}66 45%, transparent 70%)`,
+        `linear-gradient(${(180 + a) % 360}deg, ${stops(cs)})`];
+    }
+    const grain = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`;
+    const anim = state.animate ? `\n  background-size: 140% 140%;\n  animation: gradient-drift ${Math.round(10 / state.speed * 10) / 10}s ease-in-out infinite alternate;` : "";
+    return `/* Gradient Generator · ${TYPES[state.type]} gradient (CSS approximation).
+   Usage: <div class="gradient"></div>
+   For the exact look${state.animate ? " and motion" : ""}, use the HTML or React export. */
+.gradient {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background: ${cs[0]};
+}
+.gradient::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    ${layers.join(",\n    ")};${anim}
+}
+.gradient::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: ${grain};
+  opacity: ${Math.min(1, Math.round(state.grain * 4 * 100) / 100)};
+  mix-blend-mode: overlay;
+}${state.animate ? `
+@keyframes gradient-drift {
+  from { background-position: 0% 0%; }
+  to { background-position: 100% 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gradient::before { animation: none; }
+}` : ""}
+`;
+  }
+  const CODE = {
+    html: [htmlCode, "gradient.html", "text/html", "A self-contained snippet: paste it into any page. It runs the same WebGL shader as this editor, so it matches the preview exactly."],
+    react: [reactCode, "Gradient.jsx", "text/javascript", "A React component with no dependencies beyond React. It runs the same WebGL shader as this editor."],
+    css: [cssCode, "gradient.css", "text/css", "Pure CSS, no JavaScript. CSS can't run the shader, so this is a close approximation of the preview."],
+  };
+  function showCode() {
+    [...$("code-lang").children].forEach(b => b.classList.toggle("on", b.dataset.lang === lang));
+    $("code-out").textContent = CODE[lang][0]();
+    $("code-note").textContent = CODE[lang][3];
+  }
+  $("code").addEventListener("click", () => { showCode(); $("code-dialog").showModal(); });
+  $("code-close").addEventListener("click", () => $("code-dialog").close());
+  $("code-dialog").addEventListener("click", e => { if (e.target === e.currentTarget) e.currentTarget.close(); });
+  $("code-lang").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { lang = b.dataset.lang; showCode(); } });
+  $("code-copy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText($("code-out").textContent); flash($("code-copy"), "Copied"); } catch (e) { flash($("code-copy"), "Copy failed"); }
+  });
+  $("code-save").addEventListener("click", () => downloadBlob(new Blob([$("code-out").textContent], { type: CODE[lang][2] }), CODE[lang][1]));
 
   load();
   syncControls();
