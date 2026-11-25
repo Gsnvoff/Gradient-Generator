@@ -3,12 +3,15 @@
   "use strict";
 
   const MAX = 6, TAU = Math.PI * 2;
-  const TYPES = ["Mesh", "Flow", "Swirl", "Aurora", "Horizon", "Fade", "Glow", "Waves", "Prism"];
+  const TYPES = ["Mesh", "Flow", "Swirl", "Aurora", "Horizon", "Fade", "Glow", "Waves", "Prism", "Radial"];
+  const GLASS = ["None", "Fluted", "Mosaic", "Ripple", "Frosted"];
   const isRamp = t => t >= 3;
 
-  // Soft presets keep the current pattern; hero presets also pick a pattern and its settings.
-  // Hero colours run from background to brightest.
+  // Soft presets keep the current pattern; hero presets also pick a pattern and its settings (and keep
+  // the current glass); glass presets set everything, glass included. Hero colours run from background
+  // to brightest.
   const HERO = { swirl: 0, warp: 0.12, scale: 1.2, softness: 0.55, grain: 0.04 };
+  const SOFT = { swirl: 1.2, warp: 0.6, scale: 1.4, softness: 0.5, angle: 0 };
   const PRESETS = [
     ["Iridescent cloud", ["#eaf4fc", "#1e50a2", "#f09199", "#3b2a55"]],
     ["Opal", ["#e8e4f8", "#9c86e0", "#f2b8cf", "#3a2c6e"]],
@@ -42,7 +45,17 @@
     ["Deep sea", ["#031b2e", "#0a5b7a", "#36c2c9", "#c8fff6"], 7, { ...HERO, warp: 0.4, softness: 0.8 }],
     ["Holo prism", ["#ffd1f0", "#a7c4ff", "#b8ffe6", "#fff3b0"], 8, { ...HERO, warp: 0.5, softness: 0.8, grain: 0.05 }],
     ["Night prism", ["#0b0620", "#4a1d96", "#ff4f9a", "#ffb36b"], 8, { ...HERO, warp: 0.5, softness: 0.6 }],
+
+    ["Fluted ember", ["#0b0320", "#35206b", "#ff2a12", "#ff8a4c"], 9, { ...HERO, warp: 0.15, softness: 0.6, grain: 0.15, ...glass(1, 0.55, 12, 0.3, 0.21) }],
+    ["Fluted violet", ["#000000", "#3b0f9e", "#8b46ff", "#d8c2ff", "#f7f4ff"], 5, { ...HERO, angle: 180, grain: 0.1, ...glass(1, 0.45, 16, 0.3, 0.25) }],
+    ["Reeded lagoon", ["#c9f2ec", "#2ba8b5", "#2f6fb0", "#0e2f4f"], 1, { ...SOFT, grain: 0.08, ...glass(1, 0.5, 24, 0.25, 0.3) }],
+    ["Fluted aurora", ["#020611", "#063a3a", "#22e0a0", "#c9ffe8"], 3, { ...HERO, angle: 180, warp: 0.5, grain: 0.1, ...glass(1, 0.5, 20, 0.35, 0.2) }],
+    ["Mosaic cobalt", ["#02041a", "#0b1d7a", "#3d6bff", "#cfe0ff"], 4, { ...HERO, grain: 0.08, ...glass(2, 0.4, 10, 0.3, 0.25) }],
+    ["Mosaic peach", ["#ffe0cc", "#ffa884", "#ec6f73", "#6e2c45"], 2, { ...SOFT, grain: 0.06, ...glass(2, 0.5, 8, 0.2, 0.3) }],
+    ["Ripple bloom", ["#d2c2ff", "#7a4fd1", "#c0509a", "#120c33"], 1, { ...SOFT, grain: 0.06, ...glass(3, 0.6, 10, 0.3, 0.25) }],
+    ["Frosted candy", ["#ffd6e8", "#ff8fb8", "#7f6cff", "#2c1f70"], 7, { ...HERO, warp: 0.25, softness: 0.5, grain: 0.06, ...glass(4, 0.6, 12, 0.3, 0.25) }],
   ];
+  function glass(glass, glassAmount, strips, shadows, highlights) { return { glass, glassAmount, strips, shadows, highlights }; }
   const LAYOUT = [[0.78, 0.18], [0.3, 0.38], [0.72, 0.78], [0.12, 0.88], [0.5, 0.55], [0.15, 0.12]];
 
   const state = {
@@ -50,6 +63,7 @@
     colors: PRESETS[0][1].map((c, i) => ({ c, x: LAYOUT[i][0], y: LAYOUT[i][1] })),
     softness: 0.5, warp: 0.6, scale: 1.4, swirl: 1.2, grain: 0.06, seed: 7.3, angle: 0,
     animate: false, speed: 1,
+    glass: 0, glassAmount: 0.55, strips: 12, shadows: 0.3, highlights: 0.2,
     preset: 0, size: "1080x1080", custom: [1600, 1000], format: "png",
   };
   const r4 = n => Math.round(n * 1e4) / 1e4;
@@ -57,13 +71,15 @@
     type: state.type, colors: state.colors.map(p => [p.c, r4(p.x), r4(p.y)]),
     softness: state.softness, warp: state.warp, scale: state.scale, swirl: state.swirl, grain: state.grain,
     seed: state.seed, angle: state.angle, animate: state.animate, speed: state.speed,
+    glass: state.glass, glassAmount: state.glassAmount, strips: state.strips, shadows: state.shadows, highlights: state.highlights,
   });
 
   // ---------- URL state (Copy link) ----------
   function save() {
     const s = { t: state.type, c: state.colors.map(p => [p.c, r4(p.x), r4(p.y)]), so: state.softness, w: state.warp,
       sc: state.scale, sw: state.swirl, g: state.grain, se: state.seed, a: state.angle, an: state.animate ? 1 : 0,
-      sp: state.speed, sz: state.size, cu: state.custom };
+      sp: state.speed, gl: [state.glass, state.glassAmount, state.strips, state.shadows, state.highlights],
+      sz: state.size, cu: state.custom };
     history.replaceState(null, "", "#" + btoa(JSON.stringify(s)));
     ownHash = location.hash;
   }
@@ -75,6 +91,8 @@
       state.type = s.t; state.colors = s.c.slice(0, MAX).map(([c, x, y]) => ({ c, x, y }));
       Object.assign(state, { softness: s.so, warp: s.w, scale: s.sc, swirl: s.sw, grain: s.g, seed: s.se,
         angle: s.a || 0, animate: !!s.an, speed: s.sp || 1, size: s.sz || state.size, custom: s.cu || state.custom });
+      if (s.gl) [state.glass, state.glassAmount, state.strips, state.shadows, state.highlights] = s.gl;
+      else state.glass = 0;
       state.preset = -1;
     } catch (e) { /* a broken link: keep the defaults */ }
   }
@@ -114,7 +132,32 @@
     g.draw(cfg(), phase); placeHandles();
     if (state.animate) raf = requestAnimationFrame(frameTick);
   }
-  function render() { if (!raf && !busy) raf = requestAnimationFrame(frameTick); }
+  function render() { if (!raf && !busy) raf = requestAnimationFrame(frameTick); scheduleThumbs(); }
+
+  // ---------- Illustrated switches ----------
+  // Each Pattern and Glass tile is a small still drawn by the same shader, in the current colours and
+  // settings, so the switch shows what picking it will look like. Redrawn shortly after any change.
+  const thumbCanvas = document.createElement("canvas");
+  thumbCanvas.width = thumbCanvas.height = 112;
+  const thumbs = createGradient(thumbCanvas, { preserveDrawingBuffer: true });
+  let thumbTimer = 0, thumbKey = "";
+  function scheduleThumbs() { clearTimeout(thumbTimer); thumbTimer = setTimeout(drawThumbs, 120); }
+  function drawThumbs() {
+    if (!thumbs) return;
+    const base = cfg(); base.grain *= 0.5;
+    const key = JSON.stringify(base);
+    if (key === thumbKey) return;
+    thumbKey = key;
+    const paint = (btn, over) => {
+      thumbs.draw(Object.assign({}, base, over), 0);
+      btn.querySelector("i").style.backgroundImage = `url(${thumbCanvas.toDataURL("image/jpeg", 0.85)})`;
+    };
+    // Pattern tiles without glass, so the shapes read clearly; glass tiles on the current pattern.
+    [...document.getElementById("type").children].forEach(b => paint(b, { type: +b.dataset.type, glass: 0,
+      swirl: +b.dataset.type === 2 ? Math.max(base.swirl, 2) : base.swirl }));
+    [...document.getElementById("glass").children].forEach(b => paint(b, { glass: +b.dataset.glass,
+      strips: Math.min(base.strips, 8), shadows: Math.max(base.shadows, 0.3), highlights: Math.max(base.highlights, 0.3) }));
+  }
 
   // ---------- Handles ----------
   // While animating, each colour point moves along the same loop as in the shader (core.js), so the
@@ -151,7 +194,8 @@
   const $ = id => document.getElementById(id);
   const pct = v => Math.round(v * 100) + "%";
   const SLIDERS = { softness: pct, warp: pct, scale: v => (+v).toFixed(1), swirl: v => (+v).toFixed(1),
-    angle: v => Math.round(v) + "°", grain: pct, speed: v => (+v).toFixed(2) + "×" };
+    angle: v => Math.round(v) + "°", grain: pct, speed: v => (+v).toFixed(2) + "×",
+    glassAmount: pct, strips: v => Math.round(v), shadows: pct, highlights: pct };
 
   function syncControls() {
     for (const k in SLIDERS) { $(k).value = state[k]; $(k + "-v").textContent = SLIDERS[k](state[k]); }
@@ -161,6 +205,10 @@
       ? "The first colour is the background and the last is the brightest; the rest blend in between in order."
       : "Drag the rings on the canvas to move each colour.";
     [...$("type").children].forEach(b => b.classList.toggle("on", +b.dataset.type === state.type));
+    [...$("glass").children].forEach(b => b.classList.toggle("on", +b.dataset.glass === state.glass));
+    $("glass-sliders").hidden = state.glass === 0;
+    $("strips-row").hidden = state.glass === 4;
+    $("strips-label").textContent = state.glass === 3 ? "Rings" : state.glass === 2 ? "Tiles" : "Strips";
     [...$("format").children].forEach(b => b.classList.toggle("on", b.dataset.format === state.format));
     document.querySelectorAll(".preset").forEach(b => b.classList.toggle("on", +b.dataset.i === state.preset));
     $("size").value = state.size; $("custom").hidden = state.size !== "custom";
@@ -178,25 +226,30 @@
   }
   function changed() { syncControls(); render(); save(); }
 
-  function swatch(colors, type) {
+  function swatch(colors, type, opts) {
     if (type === undefined) return `conic-gradient(${colors.map((c, j) => `${c} ${j * 25}% ${(j + 1) * 25}%`).join(",")})`;
     const rev = [...colors].reverse();
-    return `radial-gradient(circle at 50% 100%, ${rev.map((c, j) => `${c} ${Math.round(j / (rev.length - 1) * 90)}%`).join(",")})`;
+    const base = `radial-gradient(circle at 50% 100%, ${rev.map((c, j) => `${c} ${Math.round(j / (rev.length - 1) * 90)}%`).join(",")})`;
+    if (!opts || !opts.glass) return base;
+    // Glass presets: light and dark ribs over the colours (tiles for mosaic).
+    const rib = d => `repeating-linear-gradient(${d}deg, rgba(255,255,255,.35) 0 1px, transparent 1px 3px, rgba(0,0,0,.25) 5px 6px)`;
+    return (opts.glass === 2 ? `${rib(90)}, ${rib(0)}, ` : opts.glass === 1 ? `${rib(90)}, ` : "") + base;
   }
   PRESETS.forEach(([name, colors, type, opts], i) => {
     const b = document.createElement("button"); b.className = "preset"; b.dataset.i = i;
-    b.innerHTML = `<i style="background:${swatch(colors, type)}"></i>${name}`;
+    b.innerHTML = `<i style="background:${swatch(colors, type, opts)}"></i>${name}`;
     b.addEventListener("click", () => {
       state.preset = i;
       state.colors = colors.map((c, j) => ({ c, x: LAYOUT[j][0], y: LAYOUT[j][1] }));
       if (type !== undefined) Object.assign(state, { angle: 0 }, opts, { type });
       changed();
     });
-    $(type === undefined ? "presets-soft" : "presets-hero").appendChild(b);
+    $(type === undefined ? "presets-soft" : opts.glass ? "presets-glass" : "presets-hero").appendChild(b);
   });
   for (const k in SLIDERS) $(k).addEventListener("input", e => { state[k] = +e.target.value; $(k + "-v").textContent = SLIDERS[k](state[k]); render(); });
   for (const k in SLIDERS) $(k).addEventListener("change", save);
   $("animate").addEventListener("change", e => { state.animate = e.target.checked; if (!state.animate) phase = 0; changed(); });
+  $("glass").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { state.glass = +b.dataset.glass; changed(); } });
   $("type").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { state.type = +b.dataset.type; changed(); } });
   $("format").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { state.format = b.dataset.format; syncControls(); } });
   $("add").addEventListener("click", () => {
@@ -337,15 +390,34 @@ ${core()}
       layers = [`radial-gradient(ellipse 110% 90% at ${ax}% ${ay}%, ${stops(rev)})`];
     } else if (state.type === 8) {
       layers = [`conic-gradient(from ${a}deg at 50% 50%, ${stops([...cs, ...rev.slice(1)])})`];
+    } else if (state.type === 9) {
+      layers = [`radial-gradient(ellipse 75% 75% at 50% 50%, ${stops(cs)})`];
     } else if (state.type === 7) {
       layers = [`repeating-linear-gradient(${(180 + a) % 360}deg, ${stops([...cs, ...rev.slice(1)]).replace(/(\d+)%/g, (_, v) => Math.round(v * 0.3) + "%")})`];
     } else {
       layers = [`linear-gradient(${(a) % 360}deg, ${cs[0]} 20%, ${cs[Math.min(2, n - 1)]}66 45%, transparent 70%)`,
         `linear-gradient(${(180 + a) % 360}deg, ${stops(cs)})`];
     }
-    const grain = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`;
+    const go = Math.min(1, Math.round(state.grain * 4 * 100) / 100);
+    const grain = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' opacity='${go}' filter='url(%23n)'/%3E%3C/svg%3E")`;
+    // Glass: CSS can't bend the gradient, so it's drawn as shading only (ribs, tiles or rings), and
+    // frosted glass blurs what's behind it.
+    const H = (state.highlights * 0.9).toFixed(2), S = (state.shadows * 0.9).toFixed(2), N = Math.round(state.strips);
+    const rib = d => `linear-gradient(${d}deg, rgba(255,255,255,${H}) 0, transparent 6%, transparent 50%, rgba(0,0,0,${S}) 100%)`;
+    let glassLayers = [], glassSizes = [], glassExtra = "";
+    if (state.glass === 1) { glassLayers = [rib(90)]; glassSizes = [`calc(100% / ${N}) 100%`]; }
+    else if (state.glass === 2) { glassLayers = [rib(90), rib(180)]; glassSizes = [`calc(100% / ${N}) 100%`, `100% calc(100% / ${N})`]; }
+    else if (state.glass === 3) {
+      glassLayers = [`repeating-radial-gradient(circle at 50% 50%, rgba(255,255,255,${H}) 0, transparent ${Math.round(400 / N) / 10}%, rgba(0,0,0,${S}) ${Math.round(700 / N) / 10}%, rgba(255,255,255,${H}) ${Math.round(1000 / N) / 10}%)`];
+      glassSizes = ["100% 100%"];
+    } else if (state.glass === 4) { glassExtra = `
+  backdrop-filter: blur(${Math.round(4 + state.glassAmount * 20)}px);
+  -webkit-backdrop-filter: blur(${Math.round(4 + state.glassAmount * 20)}px);`; }
+    const overlay = [...glassLayers, grain];
+    const sizes = glassLayers.length ? `
+  background-size: ${[...glassSizes, "200px 200px"].join(", ")};` : "";
     const anim = state.animate ? `\n  background-size: 140% 140%;\n  animation: gradient-drift ${Math.round(10 / state.speed * 10) / 10}s ease-in-out infinite alternate;` : "";
-    return `/* Gradient Generator · ${TYPES[state.type]} gradient (CSS approximation).
+    return `/* Gradient Generator · ${TYPES[state.type]} gradient${state.glass ? `, ${GLASS[state.glass].toLowerCase()} glass` : ""} (CSS approximation).
    Usage: <div class="gradient"></div>
    For the exact look${state.animate ? " and motion" : ""}, use the HTML or React export. */
 .gradient {
@@ -367,9 +439,9 @@ ${core()}
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image: ${grain};
-  opacity: ${Math.min(1, Math.round(state.grain * 4 * 100) / 100)};
-  mix-blend-mode: overlay;
+  background-image:
+    ${overlay.join(",\n    ")};${sizes}${glassExtra}
+  mix-blend-mode: ${state.glass === 4 ? "normal" : "overlay"};
 }${state.animate ? `
 @keyframes gradient-drift {
   from { background-position: 0% 0%; }

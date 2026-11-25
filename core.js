@@ -2,9 +2,11 @@
 // Both functions are self-contained on purpose: "Get code" embeds their source text as is,
 // so an exported gradient is drawn by exactly the same shader as the preview.
 //
-// cfg = { type, colors: [[hex, x, y], ...], softness, warp, scale, swirl, grain, seed, angle, animate, speed }
-// Types 0-2 (Mesh, Flow, Swirl) blend colour points; types 3-8 map a field onto the colours as a ramp
-// (first colour = background, last = brightest): Aurora, Horizon, Fade, Glow, Waves, Prism.
+// cfg = { type, colors: [[hex, x, y], ...], softness, warp, scale, swirl, grain, seed, angle, animate, speed,
+//         glass, glassAmount, strips, shadows, highlights }
+// Types 0-2 (Mesh, Flow, Swirl) blend colour points; types 3-9 map a field onto the colours as a ramp
+// (first colour = background, last = brightest): Aurora, Horizon, Fade, Glow, Waves, Prism, Radial.
+// Glass (0 none, 1 fluted, 2 mosaic, 3 ripple, 4 frosted) bends where each pixel samples the gradient.
 
 function createGradient(canvas, opts) {
   const MAX = 6;
@@ -16,6 +18,7 @@ function createGradient(canvas, opts) {
 precision highp float;
 uniform vec2 uRes; uniform int uCount; uniform vec2 uPos[${MAX}]; uniform vec3 uCol[${MAX}];
 uniform float uSoft, uWarp, uScale, uSwirl, uGrain, uSeed, uAngle, uTime; uniform int uType;
+uniform int uGlass; uniform float uGlassAmt, uStrips, uShadow, uHighlight;
 
 vec3 mod289(vec3 x){ return x - floor(x * (1.0/289.0)) * 289.0; }
 vec2 mod289(vec2 x){ return x - floor(x * (1.0/289.0)) * 289.0; }
@@ -71,8 +74,8 @@ vec3 ramp(float t){
   return fromOklab(c);
 }
 
-void main(){
-  vec2 uv = gl_FragCoord.xy / uRes; uv.y = 1.0 - uv.y;
+// The gradient itself, in linear light, at uv (0..1, y down).
+vec3 scene(vec2 uv){
   float aspect = uRes.x / uRes.y;
   vec2 c = uv - 0.5; c.x *= aspect;
   // Swirl: a twist around the centre, strongest in the middle (the Swirl type doubles it).
@@ -140,14 +143,61 @@ void main(){
       float b = 0.5 + 0.5 * sin(v * 3.14159 * uScale * 0.9);
       float e = 0.05 + 0.45 * s;
       t = smoothstep(0.5 - e, 0.5 + e, b);
-    } else {                     // Prism: conic bands spiralling out of the centre
+    } else if (uType == 8) {     // Prism: conic bands spiralling out of the centre
       // sin(angle + phi) written with a softened direction vector, so the centre is smooth, not a point.
       float r = length(w), phi = r * uScale * 2.5 + uTime;
       vec2 n = w / (r + 0.12);
       t = 0.5 + 0.5 * (n.y * cos(phi) + n.x * sin(phi));
       t = mix(t, smoothstep(0.0, 1.0, t), 1.0 - s);
+    } else {                     // Radial: colours run from the centre outwards, gently breathing
+      float r = length(w) * (1.0 - 0.06 * sin(uTime));
+      t = smoothstep(0.0, 1.0, r / (0.3 + 0.55 * s));
     }
     col = ramp(t);
+  }
+  return col;
+}
+
+void main(){
+  vec2 uv = gl_FragCoord.xy / uRes; uv.y = 1.0 - uv.y;
+  float aspect = uRes.x / uRes.y;
+  vec3 col;
+  if (uGlass == 1 || uGlass == 2) {
+    // Fluted (vertical strips) or Mosaic (square tiles): each strip or tile is a small lens that shifts
+    // what's behind it, shadowed toward its far edge with a thin highlight on its near edge.
+    vec2 cells = uGlass == 1 ? vec2(uStrips, 1.0) : vec2(uStrips, uStrips / aspect);
+    vec2 m = uGlass == 1 ? vec2(1.0, 0.0) : vec2(1.0);
+    vec2 l = fract(uv * cells), d = l * 2.0 - 1.0;
+    // Each lens is cylinder-shaped (bending most near its edges) and magnifies: at Amount 0.55 a strip
+    // shows a region about 5x its own width, so the colour sweeps across every strip.
+    vec2 bend = d * (0.55 + 0.45 * d * d);
+    col = scene(uv + uGlassAmt * 4.0 * bend * m / cells);
+    vec2 px = cells / uRes;                                   // one pixel, in cell units
+    vec2 sh = (smoothstep(0.35, 1.0, l) * 0.85 + 0.25 * d * d) * m;
+    vec2 hl = (exp(-l * l / (px * px * 2.5)) + 0.35 * exp(-l / 0.08)) * m;
+    col *= 1.0 - uShadow * max(sh.x, sh.y);
+    col += uHighlight * 0.6 * max(hl.x, hl.y);
+  } else if (uGlass == 3) {
+    // Ripple: concentric waves around the centre; they travel outwards when animated.
+    vec2 c = (uv - 0.5) * vec2(aspect, 1.0);
+    float r = length(c), ph = r * uStrips * 4.0 - uTime;
+    float fade = smoothstep(0.0, 0.08, r);                    // no hot spot in the very centre
+    col = scene(uv + uGlassAmt * 0.06 * sin(ph) * fade * (c / (r + 1e-4)) / vec2(aspect, 1.0));
+    col *= 1.0 - uShadow * 0.6 * (0.5 + 0.5 * sin(ph)) * fade;
+    col += uHighlight * 0.5 * pow(max(cos(ph), 0.0), 10.0) * fade;
+  } else if (uGlass == 4) {
+    // Frosted: each pixel averages a few randomly scattered samples, like light through etched glass.
+    col = vec3(0.0);
+    for (int k = 0; k < 4; k++) {
+      float fk = float(k);
+      vec2 j = vec2(hash(gl_FragCoord.xy + fk * 13.1), hash(gl_FragCoord.yx + fk * 7.7)) - 0.5;
+      col += scene(uv + uGlassAmt * 0.14 * j);
+    }
+    // A little milky, with a fine etched texture so the glass itself shows even over smooth colour.
+    float etch = snoise(uv * vec2(aspect, 1.0) * 90.0) * 0.5 + snoise(uv * vec2(aspect, 1.0) * 23.0) * 0.5;
+    col = col / 4.0 * (1.0 - uShadow * 0.3 * (0.5 + 0.5 * etch)) + uHighlight * (0.12 + 0.1 * smoothstep(0.1, 0.9, etch));
+  } else {
+    col = scene(uv);
   }
   col = toSRGB(col);
   // Grain, plus a one-step dither that is always on, so smooth dark gradients never show 8-bit bands.
@@ -169,7 +219,8 @@ void main(){
   const aLoc = gl.getAttribLocation(prog, "a");
   gl.enableVertexAttribArray(aLoc); gl.vertexAttribPointer(aLoc, 2, gl.FLOAT, false, 0, 0);
   const U = {};
-  ["uRes", "uCount", "uPos", "uCol", "uSoft", "uWarp", "uScale", "uSwirl", "uGrain", "uSeed", "uAngle", "uTime", "uType"]
+  ["uRes", "uCount", "uPos", "uCol", "uSoft", "uWarp", "uScale", "uSwirl", "uGrain", "uSeed", "uAngle", "uTime", "uType",
+    "uGlass", "uGlassAmt", "uStrips", "uShadow", "uHighlight"]
     .forEach(n => { U[n] = gl.getUniformLocation(prog, n); });
   const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
 
@@ -186,6 +237,9 @@ void main(){
       gl.uniform1f(U.uSoft, cfg.softness); gl.uniform1f(U.uWarp, cfg.warp); gl.uniform1f(U.uScale, cfg.scale);
       gl.uniform1f(U.uSwirl, cfg.swirl); gl.uniform1f(U.uGrain, cfg.grain); gl.uniform1f(U.uSeed, cfg.seed);
       gl.uniform1f(U.uAngle, cfg.angle || 0); gl.uniform1f(U.uTime, phase || 0); gl.uniform1i(U.uType, cfg.type);
+      gl.uniform1i(U.uGlass, cfg.glass || 0); gl.uniform1f(U.uGlassAmt, cfg.glassAmount || 0);
+      gl.uniform1f(U.uStrips, cfg.strips || 12); gl.uniform1f(U.uShadow, cfg.shadows || 0);
+      gl.uniform1f(U.uHighlight, cfg.highlights || 0);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     },
   };
