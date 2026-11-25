@@ -4,28 +4,29 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gradient Generator</title>
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 <main class="app">
   <aside class="side">
     <header>
       <h1>Gradient Generator</h1>
-      <p>Mesh, flow, hero and animated gradients with grain</p>
+      <p>Mesh, hero, glass and animated gradients with grain</p>
     </header>
 
     <section>
       <h2>Pattern</h2>
-      <div class="seg grid" id="type">
-        <button data-type="0">Mesh</button>
-        <button data-type="1">Flow</button>
-        <button data-type="2">Swirl</button>
-        <button data-type="3">Aurora</button>
-        <button data-type="4">Horizon</button>
-        <button data-type="5">Fade</button>
-        <button data-type="6">Glow</button>
-        <button data-type="7">Waves</button>
-        <button data-type="8">Prism</button>
+      <div class="tiles" id="type">
+        <button data-type="0"><i></i><span>Mesh</span></button>
+        <button data-type="1"><i></i><span>Flow</span></button>
+        <button data-type="2"><i></i><span>Swirl</span></button>
+        <button data-type="3"><i></i><span>Aurora</span></button>
+        <button data-type="4"><i></i><span>Horizon</span></button>
+        <button data-type="5"><i></i><span>Fade</span></button>
+        <button data-type="6"><i></i><span>Glow</span></button>
+        <button data-type="7"><i></i><span>Waves</span></button>
+        <button data-type="8"><i></i><span>Prism</span></button>
+        <button data-type="9"><i></i><span>Radial</span></button>
       </div>
     </section>
 
@@ -34,6 +35,8 @@
       <div class="presets" id="presets-soft"></div>
       <h2 class="gap">Hero presets</h2>
       <div class="presets" id="presets-hero"></div>
+      <h2 class="gap">Glass presets</h2>
+      <div class="presets" id="presets-glass"></div>
     </section>
 
     <section>
@@ -49,6 +52,23 @@
       <label>Swirl <output id="swirl-v"></output><input type="range" id="swirl" min="-6" max="6" step="0.1"></label>
       <label id="angle-row">Angle <output id="angle-v"></output><input type="range" id="angle" min="0" max="360" step="1"></label>
       <label>Grain <output id="grain-v"></output><input type="range" id="grain" min="0" max="0.3" step="0.005"></label>
+    </section>
+
+    <section class="sliders">
+      <h2>Glass</h2>
+      <div class="tiles" id="glass">
+        <button data-glass="0"><i></i><span>None</span></button>
+        <button data-glass="1"><i></i><span>Fluted</span></button>
+        <button data-glass="2"><i></i><span>Mosaic</span></button>
+        <button data-glass="3"><i></i><span>Ripple</span></button>
+        <button data-glass="4"><i></i><span>Frosted</span></button>
+      </div>
+      <div class="sliders" id="glass-sliders">
+        <label>Amount <output id="glassAmount-v"></output><input type="range" id="glassAmount" min="0" max="1" step="0.01"></label>
+        <label id="strips-row"><span id="strips-label">Strips</span> <output id="strips-v"></output><input type="range" id="strips" min="2" max="48" step="1"></label>
+        <label>Shadows <output id="shadows-v"></output><input type="range" id="shadows" min="0" max="1" step="0.01"></label>
+        <label>Highlights <output id="highlights-v"></output><input type="range" id="highlights" min="0" max="1" step="0.01"></label>
+      </div>
     </section>
 
     <section class="sliders">
@@ -114,7 +134,7 @@
   </div>
 </dialog>
 
-<script src="core.js?v=3"></script>
-<script src="app.js?v=3"></script>
+<script src="core.js?v=9"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>
